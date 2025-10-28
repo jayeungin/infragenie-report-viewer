@@ -7,8 +7,8 @@
   vars:
     # --- User-defined variables ---
     # !! IMPORTANT: Store sensitive keys in Ansible Vault !!
-    odf_s3_access_key: "gPn0q88f4Jhk2zH8L6aZ"
-    odf_s3_secret_key: "qvcnlAD2LYVclXc79vmbaPM694WDs22KQ6U1dnky"
+    odf_s3_access_key: "<ODF_S3_ACCESS_KEY>"  # Example: adjust as needed
+    odf_s3_secret_key: "<ODF_S3_SECRET_KEY>"  # Example: adjust as needed
 
     # Get this from your ODF/Ceph S3 endpoint (e.g., in the OpenShift console)
     odf_s3_endpoint_url: "https://s3.openshift-storage.svc:443" # Example: adjust as needed
