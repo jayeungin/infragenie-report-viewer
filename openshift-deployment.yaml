@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: List
+items:
+# ======================== CONFIGURATION =========================
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: backend-config
+  data:
+    ODF_ENDPOINT: "s3.openshift-storage.svc"
+    ODF_BUCKET: "aap-disa-stig-reports-440a96ba-d352-4887-8707-394720453269"
+    VERIFY_SSL: "false"
+
+# ========================= BACKEND ==============================
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    name: report-viewer-backend
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: report-viewer-backend-build
+  spec:
+    source:
+      type: Git
+      git:
+        # ⬇️ IMPORTANT: CHANGE THIS TO YOUR GIT REPO URL ⬇️
+        uri: "https://github.com/jayeungin/report-viewer.git"
+      contextDir: backend
+    strategy: { type: Docker }
+    output:
+      to: { kind: ImageStreamTag, name: "report-viewer-backend:latest" }
+    triggers: [ { type: ConfigChange } ]
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: report-viewer-backend
+  spec:
+    replicas: 1
+    selector:
+      matchLabels: { app: report-viewer-backend }
+    template:
+      metadata:
+        labels: { app: report-viewer-backend }
+      spec:
+        containers:
+        - name: backend
+          image: "report-viewer-backend:latest"
+          ports: [ { containerPort: 5001 } ]
+          envFrom:
+          - configMapRef: { name: backend-config }
+          - secretRef: { name: odf-credentials }
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: report-viewer-backend
+  spec:
+    selector: { app: report-viewer-backend }
+    ports: [ { port: 5001, targetPort: 5001 } ]
+
+# ========================= FRONTEND =============================
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    name: report-viewer-frontend
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: report-viewer-frontend-build
+  spec:
+    source:
+      type: Git
+      git:
+        # ⬇️ IMPORTANT: CHANGE THIS TO YOUR GIT REPO URL ⬇️
+        uri: "https://github.com/jayeungin/report-viewer.git"
+      contextDir: frontend
+    strategy: { type: Docker }
+    output:
+      to: { kind: ImageStreamTag, name: "report-viewer-frontend:latest" }
+    triggers: [ { type: ConfigChange } ]
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: report-viewer-frontend
+  spec:
+    replicas: 1
+    selector:
+      matchLabels: { app: report-viewer-frontend }
+    template:
+      metadata:
+        labels: { app: report-viewer-frontend }
+      spec:
+        containers:
+        - name: frontend
+          image: "report-viewer-frontend:latest"
+          ports: [ { containerPort: 80 } ]
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: report-viewer-frontend
+  spec:
+    selector: { app: report-viewer-frontend }
+    ports: [ { name: 80-tcp, port: 80, targetPort: 80 } ]
+
+# ======================= EXPOSE TO USERS ========================
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: report-viewer
+  spec:
+    to:
+      kind: Service
+      name: report-viewer-frontend
+    path: /
+    port:
+      targetPort: 80-tcp
+    # This alternate backend directs API calls to the backend service
+    alternateBackends:
+      - kind: Service
+        name: report-viewer-backend
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect

@@ -1,0 +1,80 @@
+---
+- name: Upload Report to OpenShift Data Foundation S3
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # --- User-defined variables ---
+    # !! IMPORTANT: Store sensitive keys in Ansible Vault !!
+    odf_s3_access_key: "gPn0q88f4Jhk2zH8L6aZ"
+    odf_s3_secret_key: "qvcnlAD2LYVclXc79vmbaPM694WDs22KQ6U1dnky"
+
+    # Get this from your ODF/Ceph S3 endpoint (e.g., in the OpenShift console)
+    odf_s3_endpoint_url: "https://s3.openshift-storage.svc:443" # Example: adjust as needed
+
+    # The name of the S3 bucket you are uploading to
+    odf_s3_bucket_name: "aap-disa-stig-reports-440a96ba-d352-4887-8707-394720453269"
+
+    # The local path to the report file you want to upload
+    local_report_path: "{{ path/to/your/report.txt }}"
+
+    # The desired name (key) for the file once it's in the S3 bucket
+    destination_object_key: "reports/daily/report-{{ ansible_date_time.iso8601_basic_short }}.txt"
+
+    # Set to 'false' if your ODF S3 endpoint uses self-signed certs
+    # For production, it's highly recommended to use valid certs and set this to 'true'
+    validate_s3_certs: false
+    # --- End of user-defined variables ---
+
+  tasks:
+    - name: Ensure amazon.aws collection is installed
+      ansible.builtin.pip:
+        name:
+          - boto3
+          - botocore
+        state: present
+      delegate_to: localhost
+      run_once: true
+      become: false
+      check_mode: false
+      pre_tasks: true
+      tags:
+        - always
+      vars:
+        ansible_python_interpreter: "{{ 'python3' if ansible_version.major >= 2 and ansible_version.minor >= 8 else 'python' }}"
+      failed_when: false # Continue even if pip fails (might be installed system-wide)
+      changed_when: false # We don't want this to show as 'changed'
+
+    - name: Upload the report file to ODF S3 Bucket
+      amazon.aws.s3_put:
+        # --- Authentication ---
+        aws_access_key: "{{ odf_s3_access_key }}"
+        aws_secret_key: "{{ odf_s3_secret_key }}"
+
+        # --- S3 Endpoint (Crucial for ODF/non-AWS S3) ---
+        # This tells the module to use your ODF S3 endpoint, not AWS
+        s3_url: "{{ odf_s3_endpoint_url }}"
+        
+        # --- Certificate Validation ---
+        # Set to 'false' if using self-signed certificates
+        validate_certs: "{{ validate_s3_certs }}"
+
+        # --- File and Bucket Details ---
+        bucket: "{{ odf_s3_bucket_name }}"
+        src: "{{ local_report_path }}"
+        object: "{{ destination_object_key }}"
+        
+        # --- Upload Parameters ---
+        mode: put # 'put' will upload the file
+        permission: private # Set S3 object ACL as needed
+
+      register: s3_upload_result
+      retries: 3
+      delay: 5
+      until: s3_upload_result is not failed
+
+    - name: Display upload result
+      ansible.builtin.debug:
+        msg: "File uploaded successfully. ETag: {{ s3_upload_result.etag }}, S3 URL: {{ s3_upload_result.s3_url }}"
+      when: s3_upload_result is not failed
