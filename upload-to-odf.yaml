@@ -14,7 +14,7 @@
     odf_s3_endpoint_url: "https://s3.openshift-storage.svc:443" # Example: adjust as needed
 
     # The name of the S3 bucket you are uploading to
-    odf_s3_bucket_name: "aap-disa-stig-reports-440a96ba-d352-4887-8707-394720453269"
+    odf_s3_bucket_name: "<ODF_S3_BUCKET_NAME>"  # Example: adjust as needed
 
     # The local path to the report file you want to upload
     local_report_path: "{{ path/to/your/report.txt }}"
